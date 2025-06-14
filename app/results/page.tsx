@@ -3,7 +3,7 @@
 /* eslint-disable react/no-unescaped-entities */
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +19,7 @@ import { Icon } from "@iconify/react";
 import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 
-export default function ResultsPage() {
+function ResultsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -420,5 +420,24 @@ export default function ResultsPage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-[#12182A] to-[#242E44] text-white flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-300 mx-auto mb-4"></div>
+        <p className="text-white/70">Chargement...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function ResultsPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ResultsContent />
+    </Suspense>
   );
 }
