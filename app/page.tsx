@@ -49,7 +49,7 @@ const agents: Agent[] = [
     id: "investisseurs",
     title: "Réunion Investisseurs",
     description:
-      "Convaincez des investisseurs potentiels de financer votre projet",
+      "Convainquez des investisseurs potentiels de financer votre projet",
     icon: "fluent-emoji:money-bag",
     firstMessage:
       "Bonjour, je suis Christophe Martin. J'ai examiné votre dossier avec attention. Pouvez-vous nous présenter votre projet et nous expliquer pourquoi nous devrions investir dans votre entreprise ?",
