@@ -15,6 +15,20 @@ export async function POST(request: Request) {
       );
     }
 
+    // Validate agentType
+    const validAgentTypes = [
+      "declaration",
+      "questions-reponses",
+      "comite",
+      "investisseurs",
+    ];
+    if (!validAgentTypes.includes(agentType)) {
+      return NextResponse.json(
+        { error: "Invalid agent type" },
+        { status: 400 }
+      );
+    }
+
     const apiKey = process.env.ELEVENLABS_API_KEY;
 
     if (!apiKey) {

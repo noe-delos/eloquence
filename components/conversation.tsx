@@ -22,9 +22,10 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { AnimatedShinyText } from "./animated-shiny-text";
+import { DeclarationRecorder } from "./declaration-recorder";
 
 interface ConversationProps {
-  agentType: "presse" | "assemblee" | "investisseurs";
+  agentType: "declaration" | "comite" | "investisseurs";
   onBack: () => void;
 }
 
@@ -44,6 +45,15 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
   const [timerInterval, setTimerInterval] = useState<NodeJS.Timeout | null>(
     null
   );
+
+  // New states for workflow management
+  const [currentPhase, setCurrentPhase] = useState<"declaration" | "questions">(
+    "declaration"
+  );
+  const [declarationComplete, setDeclarationComplete] = useState(false);
+  const [declarationTranscript, setDeclarationTranscript] =
+    useState<string>("");
+  const [showNextPhaseDialog, setShowNextPhaseDialog] = useState(false);
 
   // New states for dialog and transcript functionality
   const [showSynthesisDialog, setShowSynthesisDialog] = useState(false);
@@ -106,20 +116,34 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
       fallbackVideo: "/videos/talking1.mp4",
     };
 
+    // If we're in declaration phase for declaration agent type
+    if (agentType === "declaration" && currentPhase === "declaration") {
+      return {
+        title: "Déclaration",
+        name: "Assistant",
+        role: "Enregistrement",
+        icon: "noto:studio-microphone",
+        ...baseConfig,
+      };
+    }
+
+    // If we're in questions phase for declaration agent type
+    if (agentType === "declaration" && currentPhase === "questions") {
+      return {
+        title: "Questions/Réponses",
+        name: "Christophe Dubois",
+        role: "Journaliste",
+        icon: "material-symbols:question-answer",
+        ...baseConfig,
+      };
+    }
+
     switch (agentType) {
-      case "presse":
+      case "comite":
         return {
-          title: "Conférence de Presse",
-          name: "Christophe Dubois",
-          role: "Journaliste",
-          icon: "noto:studio-microphone",
-          ...baseConfig,
-        };
-      case "assemblee":
-        return {
-          title: "Assemblée Générale",
+          title: "Comité d'Entreprise",
           name: "Christophe Leclerc",
-          role: "Président",
+          role: "Représentant",
           icon: "fluent-color:people-community-16",
           ...baseConfig,
         };
@@ -129,6 +153,14 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
           name: "Christophe Martin",
           role: "Directeur Financier",
           icon: "fluent-emoji:money-bag",
+          ...baseConfig,
+        };
+      default:
+        return {
+          title: "Déclaration",
+          name: "Assistant",
+          role: "Enregistrement",
+          icon: "noto:studio-microphone",
           ...baseConfig,
         };
     }
@@ -295,10 +327,34 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
   const getSignedUrl = async (): Promise<string | null> => {
     try {
       setLoadingSignedUrl(true);
+
+      // Determine the actual agent type to use
+      let actualAgentType:
+        | "declaration"
+        | "questions-reponses"
+        | "comite"
+        | "investisseurs" = agentType;
+      if (agentType === "declaration" && currentPhase === "questions") {
+        actualAgentType = "questions-reponses";
+      }
+
+      const requestBody: any = { agentType: actualAgentType };
+
+      console.log("📤 Requesting signed URL with body:", requestBody);
+      console.log("📤 Current phase:", currentPhase);
+      console.log(
+        "📤 Declaration transcript available:",
+        !!declarationTranscript
+      );
+      console.log(
+        "📤 Declaration transcript length:",
+        declarationTranscript?.length || 0
+      );
+
       const response = await fetch("/api/get-signed-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agentType }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
@@ -306,6 +362,8 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
       }
 
       const data = await response.json();
+      console.log("📋 Signed URL API response:", data);
+
       if (data.directUse) {
         return null;
       }
@@ -368,43 +426,107 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
     }
   };
 
-  const startConversation = useCallback(async () => {
-    if (conversationStarted || loadingSignedUrl) return;
+  const startConversation = useCallback(
+    async (providedTranscript?: string) => {
+      if (conversationStarted || loadingSignedUrl) return;
 
-    try {
-      const signedUrl = await getSignedUrl();
+      try {
+        console.log(
+          "🚀 Starting conversation for agentType:",
+          agentType,
+          "phase:",
+          currentPhase
+        );
 
-      if (signedUrl) {
-        await conversation.startSession({ signedUrl });
-      } else if (!urlFetchFailed) {
-        const agentId = (() => {
-          switch (agentType) {
-            case "presse":
-              return process.env.NEXT_PUBLIC_PRESS_AGENT_ID;
-            case "assemblee":
-              return process.env.NEXT_PUBLIC_ASSEMBLY_AGENT_ID;
-            case "investisseurs":
-              return process.env.NEXT_PUBLIC_INVESTORS_AGENT_ID;
-            default:
-              return process.env.NEXT_PUBLIC_PRESS_AGENT_ID;
-          }
-        })();
+        const signedUrlResponse = await getSignedUrl();
+        console.log("📋 Signed URL response:", signedUrlResponse);
 
-        await conversation.startSession({
-          agentId: agentId || "default_agent_id",
-        });
+        // Prepare dynamic variables if we have a transcript
+        const dynamicVariables: any = {};
+        const transcriptToUse = providedTranscript || declarationTranscript;
+
+        if (
+          agentType === "declaration" &&
+          currentPhase === "questions" &&
+          transcriptToUse
+        ) {
+          dynamicVariables.transcript = transcriptToUse;
+          console.log(
+            "📝 Adding transcript to dynamic variables, length:",
+            transcriptToUse.length
+          );
+          console.log(
+            "📝 Transcript content preview:",
+            transcriptToUse.substring(0, 200) + "..."
+          );
+        }
+
+        console.log("🔧 Dynamic variables to send:", dynamicVariables);
+
+        if (signedUrlResponse) {
+          console.log("🔗 Using signed URL with dynamic variables");
+
+          // Start session with dynamic variables according to ElevenLabs docs
+          await conversation.startSession({
+            signedUrl: signedUrlResponse,
+            ...(Object.keys(dynamicVariables).length > 0 && {
+              dynamicVariables,
+            }),
+          });
+        } else if (!urlFetchFailed) {
+          console.log("🔗 Using direct agent ID");
+
+          const agentId = (() => {
+            // For declaration agent type, use declaration agent for both phases
+            if (agentType === "declaration") {
+              return process.env.NEXT_PUBLIC_DECLARATION_AGENT_ID;
+            }
+
+            // For other agent types
+            switch (agentType) {
+              case "comite":
+                return process.env.NEXT_PUBLIC_COMITE_AGENT_ID;
+              case "investisseurs":
+                return process.env.NEXT_PUBLIC_INVESTORS_AGENT_ID;
+              default:
+                return process.env.NEXT_PUBLIC_DECLARATION_AGENT_ID;
+            }
+          })();
+
+          console.log("🤖 Using agent ID:", agentId);
+          console.log(
+            "🔧 Dynamic variables for direct connection:",
+            dynamicVariables
+          );
+
+          // Start session with dynamic variables according to ElevenLabs docs
+          await conversation.startSession({
+            agentId: agentId || "default_agent_id",
+            ...(Object.keys(dynamicVariables).length > 0 && {
+              dynamicVariables,
+            }),
+          });
+        }
+      } catch (error) {
+        console.error("Failed to start conversation:", error);
+        setInitializing(false);
       }
-    } catch (error) {
-      console.error("Failed to start conversation:", error);
-      setInitializing(false);
-    }
-  }, [
-    conversation,
-    conversationStarted,
-    loadingSignedUrl,
-    urlFetchFailed,
-    agentType,
-  ]);
+    },
+    [
+      conversation,
+      conversationStarted,
+      loadingSignedUrl,
+      urlFetchFailed,
+      agentType,
+      currentPhase,
+      declarationTranscript,
+    ]
+  );
+
+  // Wrapper function for button clicks
+  const handleStartConversation = () => {
+    startConversation();
+  };
 
   const stopConversation = useCallback(async () => {
     const currentConversationId = conversation.getId();
@@ -415,9 +537,43 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
 
     if (currentConversationId) {
       setConversationId(currentConversationId);
-      setShowSynthesisDialog(true);
+
+      // For declaration agent, show next phase dialog instead of synthesis
+      if (agentType === "declaration" && currentPhase === "declaration") {
+        setDeclarationComplete(true);
+        setShowNextPhaseDialog(true);
+      } else {
+        setShowSynthesisDialog(true);
+      }
     }
-  }, [conversation]);
+  }, [conversation, agentType, currentPhase]);
+
+  // Handle transition to questions phase
+  const handleNextPhase = async () => {
+    if (!declarationTranscript) {
+      toast.error("Aucune transcription disponible");
+      return;
+    }
+
+    try {
+      // Switch to questions phase
+      setCurrentPhase("questions");
+      setShowNextPhaseDialog(false);
+      setInitializing(true);
+
+      // Reset states for new conversation
+      setConversationStarted(false);
+      setElapsedTime(0);
+
+      // Start questions phase conversation
+      setTimeout(() => {
+        startConversation(declarationTranscript);
+      }, 1000);
+    } catch (error) {
+      console.error("Error transitioning to questions phase:", error);
+      toast.error("Impossible de passer à la phase questions/réponses.");
+    }
+  };
 
   // Initialize everything once on component mount
   useEffect(() => {
@@ -429,17 +585,22 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
       try {
         const mediaInitialized = await initializeMedia();
         if (mediaInitialized && mounted) {
-          // Initialize assistant video with idle state
-          if (assistantVideoRef.current) {
-            assistantVideoRef.current.src = agentConfig.idleVideo;
-            assistantVideoRef.current.load();
-          }
-
-          setTimeout(() => {
-            if (mounted) {
-              startConversation();
+          // For declaration phase, just initialize media
+          if (agentType === "declaration" && currentPhase === "declaration") {
+            setInitializing(false);
+          } else {
+            // For other phases, initialize assistant video and start conversation
+            if (assistantVideoRef.current) {
+              assistantVideoRef.current.src = agentConfig.idleVideo;
+              assistantVideoRef.current.load();
             }
-          }, 1000);
+
+            setTimeout(() => {
+              if (mounted) {
+                startConversation();
+              }
+            }, 1000);
+          }
         } else {
           setInitializing(false);
         }
@@ -459,7 +620,7 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
         tracks.forEach((track) => track.stop());
       }
     };
-  }, []);
+  }, [agentType, currentPhase]);
 
   // Effect for managing status text visibility
   useEffect(() => {
@@ -477,6 +638,43 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
       });
     }
   }, [isAssistantSpeaking, conversationStarted, statusTextControls]);
+
+  // If we're in declaration phase, use the dedicated recorder component
+  if (agentType === "declaration" && currentPhase === "declaration") {
+    return (
+      <DeclarationRecorder
+        onTranscriptionComplete={(transcript) => {
+          console.log(
+            "🎯 Transcript received, transitioning to questions phase"
+          );
+          console.log("🎯 Transcript content:", transcript);
+          console.log("🎯 Transcript length:", transcript.length);
+
+          setDeclarationTranscript(transcript);
+          setDeclarationComplete(true);
+
+          // Automatically transition to questions phase
+          setCurrentPhase("questions");
+          setInitializing(true);
+
+          // Reset states for new conversation
+          setConversationStarted(false);
+          setElapsedTime(0);
+
+          // Start questions phase conversation after state has updated
+          // Use a longer delay to ensure state is properly set
+          setTimeout(() => {
+            console.log(
+              "🚀 About to start questions phase with transcript:",
+              transcript
+            );
+            startConversation(transcript);
+          }, 2000);
+        }}
+        onBack={onBack}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col justify-between h-screen bg-gradient-to-br from-[#12182A] to-[#242E44] text-white">
@@ -498,6 +696,11 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
             <h1 className="text-xl font-bold bg-gradient-to-r from-amber-200 to-yellow-500 bg-clip-text text-transparent">
               {agentConfig.title}
             </h1>
+            {agentType === "declaration" && (
+              <span className="text-xs bg-amber-500/20 text-amber-300 px-2 py-1 rounded-full ml-2">
+                {currentPhase === "declaration" ? "Phase 1/2" : "Phase 2/2"}
+              </span>
+            )}
           </div>
           <p className="text-xs text-white/70">
             {agentConfig.name} • {agentConfig.role}
@@ -521,10 +724,10 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
         </div>
       </div>
 
-      {/* Compact Main content */}
+      {/* Main content - Questions Phase Layout */}
       <div className="flex-grow flex items-center justify-center p-4">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 w-full max-w-5xl items-center">
-          {/* Left - Assistant Video - Larger and More to the Left */}
+          {/* Left - Assistant Video */}
           <div className="flex justify-center lg:justify-start lg:pl-8 relative">
             <Card className="overflow-hidden w-80 h-80 bg-gradient-to-b from-[#1c2437] to-[#12182A] border border-white/10 shadow-2xl relative rounded-full">
               <div className="h-full w-full relative rounded-full overflow-hidden">
@@ -543,25 +746,22 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
                   style={{ objectPosition: "center 10%" }}
                 >
                   <source src={agentConfig.idleVideo} type="video/mp4" />
-                  {/* Fallback */}
                   <source src={agentConfig.fallbackVideo} type="video/mp4" />
                 </video>
 
-                {/* Professional speaking indicator */}
                 {isAssistantSpeaking && conversationStarted && (
                   <motion.div
                     className="absolute z-50 inset-0 bg-gradient-to-t from-black/20 to-transparent rounded-full"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                  ></motion.div>
+                  />
                 )}
               </div>
             </Card>
 
-            {/* Status indicator - Outside the card, positioned absolutely */}
+            {/* Status indicator */}
             <div className="absolute top-4 right-[7rem] flex items-center bg-black/90 backdrop-blur-sm rounded-full px-3 py-2 shadow-xl border border-white/30 z-[60]">
-              {/* Animated dots when speaking */}
               {isAssistantSpeaking && conversationStarted && (
                 <div className="flex space-x-1 mr-2">
                   {Array.from({ length: 3 }).map((_, i) => (
@@ -617,12 +817,10 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
                   </div>
                 )}
 
-                {/* User status */}
                 <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-sm rounded-full px-3 py-1">
                   <span className="text-white text-xs">Vous</span>
                 </div>
 
-                {/* Mic status indicator */}
                 <div className="absolute bottom-4 right-4">
                   <div
                     className={`p-2 rounded-full ${
@@ -644,7 +842,7 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
         </div>
       </div>
 
-      {/* Compact Bottom controls */}
+      {/* Bottom controls */}
       <div className="p-4 border-t border-white/10 backdrop-blur-sm bg-[#12182A]/80">
         <div className="flex justify-center items-center gap-4">
           <Button
@@ -677,11 +875,12 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
             )}
           </Button>
 
+          {/* Questions Phase Controls (ElevenLabs conversation) */}
           {urlFetchFailed ? (
             <Button
               className="rounded-full h-14 w-14 shadow-lg bg-gradient-to-r from-amber-200 to-yellow-500 hover:from-amber-300 hover:to-yellow-600 text-[#12182A]"
               size="icon"
-              onClick={startConversation}
+              onClick={handleStartConversation}
             >
               <Icon icon="lucide:play" className="h-5 w-5" />
             </Button>
@@ -690,7 +889,7 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
               className="rounded-full h-14 w-14 shadow-lg bg-gradient-to-r from-amber-200 to-yellow-500 hover:from-amber-300 hover:to-yellow-600 text-[#12182A]"
               size="icon"
               disabled={conversationStarted || loadingSignedUrl}
-              onClick={startConversation}
+              onClick={handleStartConversation}
             >
               {initializing || loadingSignedUrl ? (
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#12182A]"></div>
@@ -721,6 +920,56 @@ export function Conversation({ agentType, onBack }: ConversationProps) {
           </p>
         </div>
       </div>
+
+      {/* Phase Transition Dialog - From Declaration to Questions */}
+      <Dialog open={showNextPhaseDialog} onOpenChange={setShowNextPhaseDialog}>
+        <DialogContent className="sm:max-w-lg bg-gradient-to-b from-[#1c2437] to-[#12182A] border border-white/10 text-white z-[70]">
+          <DialogHeader className="text-center">
+            <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-amber-200 to-yellow-500 bg-clip-text text-transparent">
+              Déclaration terminée !
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex flex-col items-center py-6">
+            <div className="w-16 h-16 bg-gradient-to-br from-amber-200 to-yellow-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Icon
+                icon="material-symbols:question-answer"
+                className="w-8 h-8 text-[#12182A]"
+              />
+            </div>
+
+            <h3 className="text-lg mb-3 text-center font-semibold text-white">
+              Prêt pour les questions ?
+            </h3>
+
+            <p className="text-white/70 text-center text-sm mb-4">
+              Votre déclaration a été enregistrée. Passons maintenant aux
+              questions-réponses avec un journaliste basées sur ce que vous
+              venez de dire.
+            </p>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowNextPhaseDialog(false);
+                setShowSynthesisDialog(true);
+              }}
+              className="w-full sm:w-auto bg-[#1a2332] border-gray-600 text-white hover:bg-[#242e42] hover:text-white"
+            >
+              Terminer ici
+            </Button>
+            <Button
+              onClick={handleNextPhase}
+              className="w-full sm:w-auto bg-gradient-to-r from-amber-200 to-yellow-500 hover:from-amber-300 hover:to-yellow-600 text-[#12182A]"
+            >
+              Continuer vers les questions
+              <Icon icon="lucide:arrow-right" className="ml-2 w-4 h-4" />
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Synthesis Dialog */}
       <Dialog open={showSynthesisDialog} onOpenChange={setShowSynthesisDialog}>

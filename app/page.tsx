@@ -16,7 +16,7 @@ import { Icon } from "@iconify/react";
 import Image from "next/image";
 import { Toaster } from "sonner";
 
-type AgentType = "presse" | "assemblee" | "investisseurs";
+type AgentType = "declaration" | "comite" | "investisseurs";
 
 interface Agent {
   id: AgentType;
@@ -28,31 +28,27 @@ interface Agent {
 
 const agents: Agent[] = [
   {
-    id: "presse",
-    title: "Conférence de Presse",
-    description:
-      "Affrontez les questions des journalistes et défendez votre position",
+    id: "declaration",
+    title: "Déclaration",
+    description: "Énoncez votre déclaration puis répondez aux questions",
     icon: "noto:studio-microphone",
     firstMessage:
-      "Bonjour, je suis Christophe Dubois, journaliste. Nous sommes ici pour cette conférence de presse. Pouvez-vous commencer par vous présenter et nous expliquer l'objet de cette rencontre ?",
+      "Bonjour, vous avez la parole pour votre déclaration. Prenez votre temps.",
   },
   {
-    id: "assemblee",
-    title: "Assemblée Générale",
-    description:
-      "Présentez vos résultats et répondez aux questions des actionnaires",
+    id: "comite",
+    title: "Comité d'Entreprise",
+    description: "Présentez vos résultats aux représentants du personnel",
     icon: "fluent-color:people-community-16",
-    firstMessage:
-      "Mesdames et messieurs les actionnaires, je vous souhaite la bienvenue à cette assemblée générale. En tant que président de séance, je vous invite à présenter les résultats de l'exercice écoulé.",
+    firstMessage: "Bonjour, présentez-nous les résultats de l'exercice.",
   },
   {
     id: "investisseurs",
     title: "Réunion Investisseurs",
-    description:
-      "Convainquez des investisseurs potentiels de financer votre projet",
+    description: "Convainquez des investisseurs de financer votre projet",
     icon: "fluent-emoji:money-bag",
     firstMessage:
-      "Bonjour, je suis Christophe Martin. J'ai examiné votre dossier avec attention. Pouvez-vous nous présenter votre projet et nous expliquer pourquoi nous devrions investir dans votre entreprise ?",
+      "Bonjour, présentez-nous votre projet et votre demande de financement.",
   },
 ];
 
