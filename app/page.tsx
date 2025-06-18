@@ -29,23 +29,23 @@ interface Agent {
 const agents: Agent[] = [
   {
     id: "declaration",
-    title: "Déclaration",
-    description: "Énoncez votre déclaration puis répondez aux questions",
+    title: "Conférence de presse",
+    description: "Pitchez votre projet et répondez aux questions de la presse",
     icon: "noto:studio-microphone",
     firstMessage:
       "Bonjour, vous avez la parole pour votre déclaration. Prenez votre temps.",
   },
   {
     id: "comite",
-    title: "Comité d'Entreprise",
-    description: "Présentez vos résultats aux représentants du personnel",
+    title: "Comité social et économique (CSE)",
+    description: "Faites face aux élus du personnel",
     icon: "fluent-color:people-community-16",
     firstMessage: "Bonjour, présentez-nous les résultats de l'exercice.",
   },
   {
     id: "investisseurs",
-    title: "Réunion Investisseurs",
-    description: "Convainquez des investisseurs de financer votre projet",
+    title: "Interview Tv",
+    description: "Répondez à un journaliste imprévisible",
     icon: "fluent-emoji:money-bag",
     firstMessage:
       "Bonjour, présentez-nous votre projet et votre demande de financement.",
@@ -165,7 +165,7 @@ export default function Home() {
       <footer className="border-t border-white/10 mt-16 py-8">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center text-white/50">
-            <p>&copy; 2024 Avec Éloquence. Tous droits réservés.</p>
+            <p>&copy; 2025 Avec Éloquence. Tous droits réservés.</p>
           </div>
         </div>
       </footer>
